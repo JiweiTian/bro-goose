@@ -1,0 +1,152 @@
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/scripts/base/init-bare.bro bro-with-goose-2.5.4/scripts/base/init-bare.bro
+4015a4016,4086
+> module GOOSE;
+> export {
+> 	## Record holding information relevant for any GOOSE message.
+> 	type GOOSE::PacketInfo : record {
+> 		destination : string; ##< Destination MAC address	
+> 		source : string; ##< Source MAC address	
+> 		captureTime : double; ##< Time in seconds at which the GOOSE packet was captured. 0.0s is Bro start time.
+> 	};
+> 
+> 	## Measurement of time
+> 	type GOOSE::UTCTime : record {
+> 		## The number of seconds elapsed since 0h on January the 1rst,
+> 		## 1970
+> 		secondsSince1970 : count;
+> 		## The number of nanoseconds since the last whole second
+> 		nanoseconds	 : count;
+> 	};
+> 
+> 
+> 	## Record representing the object Data described in IEC 61850.
+> 	##
+> 	## The official type held by this record is represented by the
+> 	## field "officialType". It is the ASN.1 tag parsed at the
+> 	## beginning of the Data. There is no 1-on-1 correspondance
+> 	## between the official type and the underlying type of the 
+> 	## data actually held by the record, since some different
+> 	## official types lead to having to store the same type of data
+> 	## (e.g. bit-string and boolean-array).
+> 	## Only one of the optional fields of a GOOSE::Data contains a
+> 	## value.
+> 	type GOOSE::Data : record {
+> 		## The tag parsed at the beginning of the Data as it is
+> 		## described in the GOOSE standard. Its value is between
+> 		## 0x81 and 0x91.
+> 		officialType: count;
+> 
+> 		boolVal     : bool &optional;
+> 		intVal      : int &optional;
+> 		uintVal     : count &optional;
+> 		realVal     : double &optional;
+> 		bitStringVal: vector of bool &optional;
+> 		stringVal   : string &optional;
+> 		timeVal     : GOOSE::UTCTime &optional;
+> 	} &redef;
+> 
+> 	type GOOSE::SequenceOfData : vector of GOOSE::Data;
+> 
+> 	# The Bro scripting language handles type recursion only through
+> 	# redef.
+> 	redef record GOOSE::Data += {
+> 		arrayVal: GOOSE::SequenceOfData &optional;
+> 	};
+> 
+> 	## The main object of GOOSE
+> 	type GOOSE::PDU : record {
+> 		gocbRef          : string;
+> 		timeAllowedToLive: count;
+> 		datSet		 : string;
+> 		goID		 : string &optional;
+> 		t		 : GOOSE::UTCTime;
+> 		stNum		 : count;
+> 		sqNum		 : count;
+> 		test		 : bool;
+> 		confRev		 : count;
+> 		ndsCom		 : bool;
+> 		numDatSetEntries : count;
+> 		allData		 : GOOSE::SequenceOfData;
+> 	};
+> }
+> 
+> 
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/scripts/base/init-default.bro bro-with-goose-2.5.4/scripts/base/init-default.bro
+50a51
+> @load base/protocols/goose
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/analyzer/protocol/asn1/asn1.pac bro-with-goose-2.5.4/src/analyzer/protocol/asn1/asn1.pac
+7a8
+>         StringVal* asn1_oid_to_val(const bytestring& oid);
+117c118
+< 	return asn1_oid_to_val(oid->encoding());
+---
+>         return asn1_oid_to_val(oid->encoding()->content());
+121a123,127
+> 	return asn1_oid_to_val(oid->content());
+> 	}
+> 
+> StringVal* asn1_oid_to_val(const bytestring & bs)
+> 	{
+126d131
+< 	bytestring const& bs = oid->content();
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/analyzer/protocol/CMakeLists.txt bro-with-goose-2.5.4/src/analyzer/protocol/CMakeLists.txt
+14a15
+> add_subdirectory(goose)
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/iosource/Packet.cc bro-with-goose-2.5.4/src/iosource/Packet.cc
+44a45
+>         have_L3 = true; // default value is 'true' as it is in most cases.
+189a191,197
+>                                 // Handle GOOSE protocol over VLAN
+> 				else if ((protocol | 0x0001) == 0x88b9)
+> 					// same condition as (protocol == 0x88b8 || protocol == 0x88b9)
+> 					// but faster to execute
+> 				{
+> 					have_L3 = false;
+> 				}
+215a224,229
+>                                 break;
+> 			case 0x88b9: //GOOSE protocol
+> 			case 0x88b8: //GOOSE protocol
+> 				eth_type = protocol;
+> 				have_L3 = false;
+> 
+220c234
+< 		if ( ! have_mpls && l3_proto == L3_UNKNOWN )
+---
+>                 if (have_L3 && ! have_mpls && l3_proto == L3_UNKNOWN )
+234a249,252
+> 
+>                 if(!have_L3 && eth_type==0) {
+> 			Weird("No Layer 3 protocols and couldn't identify Layer 2 protocol.");
+> 		}
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/iosource/Packet.h bro-with-goose-2.5.4/src/iosource/Packet.h
+229a230,232
+> 
+>         // True if this carries a Level 3 protocol or ARP.
+> 	bool have_L3;
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/Sessions.cc bro-with-goose-2.5.4/src/Sessions.cc
+29a30,31
+> #include "analyzer/protocol/goose/GOOSE.h"
+> #include "analyzer/protocol/goose/events.bif.h"
+151a154,159
+>         
+>         // GOOSE analyzer.
+> 	if ( goose_message )
+> 		goose_analyzer = new analyzer::goose::GOOSE_Analyzer();	
+> 	else
+> 		goose_analyzer = 0;
+160a169
+>         Unref(goose_analyzer);
+227a237,242
+> 
+>         else if( (pkt->eth_type | 0x0001) == 0x88b9)
+> 		// if eth_type == 0x88b8 OR 0x88b9
+> 	        {
+> 		goose_analyzer->NextPacket(t, pkt);
+> 	        } 
+diff -r -x build -x testing -x '*.swp' bro-2.5.4/src/Sessions.h bro-with-goose-2.5.4/src/Sessions.h
+31a32
+> namespace analyzer { namespace goose { class GOOSE_Analyzer; } }
+237a239
+>         analyzer::goose::GOOSE_Analyzer* goose_analyzer;
+Only in bro-with-goose-2.5.4/: tmp.diff
