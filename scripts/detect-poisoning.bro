@@ -5,8 +5,10 @@
 
 module GOOSE;
 
+const MAX_ST = 65535; # 2**16 - 1
+const MAX_SQ = 65535;
 ## Threshold for attack indictor: number of packets received with old sqNum that signifies an attack.
-global detection_threshold = 3;
+const DETECTION_THRESHOLD = 3;
 
 # Record to hold latest timestamp, stNum, and sqNum.
 type StateRec: record {
@@ -18,8 +20,10 @@ type StateRec: record {
 # [src_mac] -> {capture_time, latest_st_num, latest_sq_num}
 global src_state_map: table[string] of StateRec;
 
-# [src_mac] -> count_old_state_transmitted
-global old_retransmission_map: table[string] of count;
+# [src_mac] -> count_old_state_number_transmitted
+global invalid_st_replay : table[string] of count;
+# [src_mac] -> count_old_sequence_number_transmitted
+global invalid_sq_replay: table[string] of count;
 
 # Set to hold source MAC addresses which have been found to be attack sources so far.
 global attack_sources: set[string];
@@ -27,6 +31,30 @@ global attack_sources: set[string];
 export {
         redef enum Notice::Type += { GOOSE_Poisoning }; 
 }
+
+function handle_replay_attack(source: string, field: string)
+	{
+	local field_name = "stNum";
+	if ( field == "sq")
+		field_name = "sqNum";
+	if ( source !in attack_sources )
+		{
+		add attack_sources[source];
+		# Generate attack-detection notice.
+		NOTICE([$note=GOOSE_Poisoning,
+			$msg=fmt("GOOSE replay attempt detected with invalid %s: source %s, attack stNum %d, and sqNum %d",
+				field_name, source, src_state_map[source]$st, src_state_map[source]$sq)
+			]);
+		}
+	else
+		{
+		# Generate attack-continuation notice.
+		NOTICE([$note=GOOSE_Poisoning,
+			$msg=fmt("GOOSE replay attempt continued with invalid %s: source %s, attack stNum %d, and sqNum %d",
+				field_name, source, src_state_map[source]$st, src_state_map[source]$sq)
+			]);
+		}	
+	}
 
 event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
         {
@@ -39,47 +67,50 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
 	if ( src_mac !in src_state_map )
 		{
 		src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
-		old_retransmission_map[src_mac] = 0;
+		invalid_st_replay[src_mac] = 0;
+		invalid_sq_replay[src_mac] = 0;
 		}
 	else
 		{
 		if ( timestamp > src_state_map[src_mac]$ts )
 			{
-			if ( st_num > src_state_map[src_mac]$st )
+			if ( st_num > src_state_map[src_mac]$st || src_state_map[src_mac]$st == MAX_ST ) 
 				{
+				# Transmission of new state.
 				src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
 				}
-			else if ( st_num == src_state_map[src_mac]$st && sq_num > src_state_map[src_mac]$sq)
+			else if ( st_num == src_state_map[src_mac]$st )
 				{
-				src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
-				}
-			else if ( st_num < src_state_map[src_mac]$st )
-				{
-				old_retransmission_map[src_mac] += 1;
-				if ( old_retransmission_map[src_mac] >= detection_threshold )
+				# Re-transmission.
+				if ( sq_num > src_state_map[src_mac]$sq || src_state_map[src_mac]$sq == MAX_SQ)
 					{
-					if ( src_mac !in attack_sources )
+					src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+					}
+				else
+					{
+					# Invalid sqNum.
+					invalid_sq_replay[src_mac] += 1;
+					if ( invalid_sq_replay[src_mac] >= DETECTION_THRESHOLD )
 						{
-						add attack_sources[src_mac];
-						# Generate attack-detection notice.
-						NOTICE([$note=GOOSE_Poisoning,
-                                			$msg=fmt("GOOSE poisoning attempt detected: source %s, attack stNum %d, and sqNum %d",
-                                        			src_mac, src_state_map[src_mac]$st, src_state_map[src_mac]$sq)
-                                			]);
+						handle_replay_attack(src_mac, "sq");
+						# Reset counter.
+						invalid_sq_replay[src_mac] = 0;
+						src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
 						}
-					else
-						{
-						# Generate attack-continuation notice.
-						NOTICE([$note=GOOSE_Poisoning,
-                                			$msg=fmt("GOOSE poisoning attempt continued: source %s, attack stNum %d, and sqNum %d",
-                                        			src_mac, src_state_map[src_mac]$st, src_state_map[src_mac]$sq)
-                                			]);
-						}
-					# Reset counter.
-					old_retransmission_map[src_mac] = 0;
+					
 					}
 				}
-			# Todo, other cases, if important, under 'else'
+			else # st_num < src_state_map[src_mac]$st
+				{
+				invalid_st_replay[src_mac] += 1;
+				if ( invalid_st_replay[src_mac] >= DETECTION_THRESHOLD )
+					{
+					handle_replay_attack(src_mac, "st");
+					# Reset counter.
+					invalid_st_replay[src_mac] = 0;
+					src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+					}
+				}
 			}
 		}
 
