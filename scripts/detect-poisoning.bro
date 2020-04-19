@@ -7,14 +7,15 @@ module GOOSE;
 
 const MAX_ST = 65535; # 2**16 - 1
 const MAX_SQ = 65535;
-## Threshold for attack indictor: number of packets received with old sqNum that signifies an attack.
+## Threshold for attack indictor:
+## number of voilations more than the threshold would signify an attack.
 const DETECTION_THRESHOLD = 3;
 
-# Record to hold latest timestamp, stNum, and sqNum.
+# Record to hold attributes from last relevant packet.
 type StateRec: record {
 	src: string;
 	dst: string;
-	ts: double;
+	ts: time;
 	st: count;
 	sq: count;
 };
@@ -36,24 +37,25 @@ export {
 
 function handle_replay_attack(data_set: string, field: string)
 	{
-	local field_name = "stNum";
+	# Generate notices given a GOOSE attack packet.
+	local field_name = "StNum";
 	if ( field == "sq")
-		field_name = "sqNum";
+		field_name = "SqNum";
 	if ( data_set !in attack_sources )
 		{
 		add attack_sources[data_set];
 		# Generate attack-detection notice.
 		NOTICE([$note=GOOSE_Poisoning,
-			$msg=fmt("GOOSE replay attempt detected with invalid %s: source %s, attack stNum %d, and sqNum %d",
-				field_name, src_state_map[data_set]$src, src_state_map[data_set]$st, src_state_map[data_set]$sq)
+			$msg=fmt("GOOSE replay attempt detected with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
+				field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}
 	else
 		{
 		# Generate attack-continuation notice.
 		NOTICE([$note=GOOSE_Poisoning,
-			$msg=fmt("GOOSE replay attempt continued with invalid %s: source %s, attack stNum %d, and sqNum %d",
-				field_name, src_state_map[data_set]$src, src_state_map[data_set]$st, src_state_map[data_set]$sq)
+			$msg=fmt("GOOSE replay attempt continued with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
+				field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}	
 	}
@@ -62,7 +64,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
         {
 	local src_mac = info$source;
 	local dst_mac = info$destination;
-	local timestamp = info$captureTime;
+	local timestamp = network_time(); # info$captureTime;
 	local data_set = pdu$datSet;
         local st_num = pdu$stNum;
         local sq_num = pdu$sqNum;
@@ -75,7 +77,8 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
 		}
 	else
 		{
-		if ( timestamp > src_state_map[data_set]$ts )
+		# Only consider the packets that are captured at a later time after the last seen packet.
+		if ( timestamp >= src_state_map[data_set]$ts )
 			{
 			if ( st_num > src_state_map[data_set]$st || src_state_map[data_set]$st == MAX_ST ) 
 				{
