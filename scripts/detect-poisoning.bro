@@ -12,38 +12,40 @@ const DETECTION_THRESHOLD = 3;
 
 # Record to hold latest timestamp, stNum, and sqNum.
 type StateRec: record {
+	src: string;
+	dst: string;
 	ts: double;
 	st: count;
 	sq: count;
 };
 
-# [src_mac] -> {capture_time, latest_st_num, latest_sq_num}
+# [dataSet] -> {src_mac, dst_mac, capture_time, latest_st_num, latest_sq_num}
 global src_state_map: table[string] of StateRec;
 
-# [src_mac] -> count_old_state_number_transmitted
+# [dataSet] -> count_old_state_number_transmitted
 global invalid_st_replay : table[string] of count;
-# [src_mac] -> count_old_sequence_number_transmitted
+# [dataSet] -> count_old_sequence_number_transmitted
 global invalid_sq_replay: table[string] of count;
 
-# Set to hold source MAC addresses which have been found to be attack sources so far.
+# Set to hold dataSets that have been found to be attack sources so far.
 global attack_sources: set[string];
 
 export {
         redef enum Notice::Type += { GOOSE_Poisoning }; 
 }
 
-function handle_replay_attack(source: string, field: string)
+function handle_replay_attack(data_set: string, field: string)
 	{
 	local field_name = "stNum";
 	if ( field == "sq")
 		field_name = "sqNum";
-	if ( source !in attack_sources )
+	if ( data_set !in attack_sources )
 		{
-		add attack_sources[source];
+		add attack_sources[data_set];
 		# Generate attack-detection notice.
 		NOTICE([$note=GOOSE_Poisoning,
 			$msg=fmt("GOOSE replay attempt detected with invalid %s: source %s, attack stNum %d, and sqNum %d",
-				field_name, source, src_state_map[source]$st, src_state_map[source]$sq)
+				field_name, src_state_map[data_set]$src, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}
 	else
@@ -51,7 +53,7 @@ function handle_replay_attack(source: string, field: string)
 		# Generate attack-continuation notice.
 		NOTICE([$note=GOOSE_Poisoning,
 			$msg=fmt("GOOSE replay attempt continued with invalid %s: source %s, attack stNum %d, and sqNum %d",
-				field_name, source, src_state_map[source]$st, src_state_map[source]$sq)
+				field_name, src_state_map[data_set]$src, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}	
 	}
@@ -61,54 +63,55 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
 	local src_mac = info$source;
 	local dst_mac = info$destination;
 	local timestamp = info$captureTime;
+	local data_set = pdu$datSet;
         local st_num = pdu$stNum;
         local sq_num = pdu$sqNum;
 
-	if ( src_mac !in src_state_map )
+	if ( data_set !in src_state_map )
 		{
-		src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
-		invalid_st_replay[src_mac] = 0;
-		invalid_sq_replay[src_mac] = 0;
+		src_state_map[data_set] = [$src = src_mac, $dst = dst_mac, $ts = timestamp, $st = st_num, $sq = sq_num];
+		invalid_st_replay[data_set] = 0;
+		invalid_sq_replay[data_set] = 0;
 		}
 	else
 		{
-		if ( timestamp > src_state_map[src_mac]$ts )
+		if ( timestamp > src_state_map[data_set]$ts )
 			{
-			if ( st_num > src_state_map[src_mac]$st || src_state_map[src_mac]$st == MAX_ST ) 
+			if ( st_num > src_state_map[data_set]$st || src_state_map[data_set]$st == MAX_ST ) 
 				{
 				# Transmission of new state.
-				src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+				src_state_map[data_set] = [$src = src_mac, $dst = dst_mac, $ts = timestamp, $st = st_num, $sq = sq_num];
 				}
-			else if ( st_num == src_state_map[src_mac]$st )
+			else if ( st_num == src_state_map[data_set]$st )
 				{
 				# Re-transmission.
-				if ( sq_num > src_state_map[src_mac]$sq || src_state_map[src_mac]$sq == MAX_SQ)
+				if ( sq_num > src_state_map[data_set]$sq || src_state_map[data_set]$sq == MAX_SQ)
 					{
-					src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+					src_state_map[data_set] = [$src = src_mac, $dst = dst_mac, $ts = timestamp, $st = st_num, $sq = sq_num];
 					}
 				else
 					{
 					# Invalid sqNum.
-					invalid_sq_replay[src_mac] += 1;
-					if ( invalid_sq_replay[src_mac] >= DETECTION_THRESHOLD )
+					invalid_sq_replay[data_set] += 1;
+					if ( invalid_sq_replay[data_set] >= DETECTION_THRESHOLD )
 						{
-						handle_replay_attack(src_mac, "sq");
+						handle_replay_attack(data_set, "sq");
 						# Reset counter.
-						invalid_sq_replay[src_mac] = 0;
-						src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+						invalid_sq_replay[data_set] = 0;
+						src_state_map[data_set] = [$src = src_mac, $dst = dst_mac, $ts = timestamp, $st = st_num, $sq = sq_num];
 						}
 					
 					}
 				}
-			else # st_num < src_state_map[src_mac]$st
+			else # st_num < src_state_map[data_set]$st
 				{
-				invalid_st_replay[src_mac] += 1;
-				if ( invalid_st_replay[src_mac] >= DETECTION_THRESHOLD )
+				invalid_st_replay[data_set] += 1;
+				if ( invalid_st_replay[data_set] >= DETECTION_THRESHOLD )
 					{
-					handle_replay_attack(src_mac, "st");
+					handle_replay_attack(data_set, "st");
 					# Reset counter.
-					invalid_st_replay[src_mac] = 0;
-					src_state_map[src_mac] = [$ts = timestamp, $st = st_num, $sq = sq_num];
+					invalid_st_replay[data_set] = 0;
+					src_state_map[data_set] = [$src = src_mac, $dst = dst_mac, $ts = timestamp, $st = st_num, $sq = sq_num];
 					}
 				}
 			}
