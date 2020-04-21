@@ -2,6 +2,7 @@
 ##! which will indicate an MITM poisoning attack.
 
 @load base/frameworks/notice
+@load policy/misc/stats
 
 module GOOSE;
 
@@ -33,11 +34,28 @@ global attack_sources: set[string];
 
 export {
         redef enum Notice::Type += { GOOSE_Poisoning }; 
+	redef Stats::report_interval = 3msec;
+	redef enum Log::ID += { LOG_STAT };
+	type LogStat: record {
+		ts: time	&log; # network_time()
+		curr_time: time	&log; # current_time()
+		src_mac: string	&log; # Source MAC address
+		dat_set: string	&log; # GOOSE dataSet
+		delay: double	&log; # curr_time - ts in msec
+		length: count	&log; # GOOSE length	
+	};
+	global log_goose_stat: event(rec: LogStat);
 }
+
+event bro_init() &priority=5
+        {
+		Log::create_stream(GOOSE::LOG_STAT, [$columns=LogStat, $ev=log_goose_stat, $path="goose_stat"]);	
+	}
 
 function handle_replay_attack(data_set: string, field: string)
 	{
 	# Generate notices given a GOOSE attack packet.
+	local curr_time: time;
 	local field_name = "StNum";
 	if ( field == "sq")
 		field_name = "SqNum";
@@ -45,17 +63,19 @@ function handle_replay_attack(data_set: string, field: string)
 		{
 		add attack_sources[data_set];
 		# Generate attack-detection notice.
+		curr_time = current_time();
 		NOTICE([$note=GOOSE_Poisoning,
-			$msg=fmt("GOOSE replay attempt detected with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
-				field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
+			$msg=fmt("Curr_time %f GOOSE replay attempt detected with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
+				curr_time, field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}
 	else
 		{
 		# Generate attack-continuation notice.
+		curr_time = current_time();
 		NOTICE([$note=GOOSE_Poisoning,
-			$msg=fmt("GOOSE replay attempt continued with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
-				field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
+			$msg=fmt("Curr_time %f GOOSE replay attempt continued with invalid %s: src_mac %s, data_set %s attack st_num %d, and sq_num %d",
+				curr_time, field_name, src_state_map[data_set]$src, data_set, src_state_map[data_set]$st, src_state_map[data_set]$sq)
 			]);
 		}	
 	}
@@ -68,6 +88,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
 	local data_set = pdu$datSet;
         local st_num = pdu$stNum;
         local sq_num = pdu$sqNum;
+
 
 	if ( data_set !in src_state_map )
 		{
@@ -119,5 +140,13 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU)
 				}
 			}
 		}
-
+	local curr_time = current_time();
+	local stat_rec: LogStat;
+	stat_rec$ts = timestamp;
+	stat_rec$curr_time = curr_time;
+	stat_rec$src_mac = src_mac;
+	stat_rec$dat_set = data_set;
+	stat_rec$delay = (time_to_double(curr_time) - time_to_double(timestamp)) * 1000; #msec
+	# stat_rec$length = info$length;
+	Log::write(LOG_STAT, stat_rec);
         }
