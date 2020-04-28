@@ -72,12 +72,12 @@ export {
 	global log_goose_stat: event(rec: Stat);
 
 	## Maximum value that stNum can take, as configured. 
-	option MAX_ST = 65535 &redef; # 2**16 - 1
+	const MAX_ST = 65535 &redef; # 2**16 - 1
 	## Maximum value that sqNum can take, as configured. 
-	option MAX_SQ = 65535 &redef;
+	const MAX_SQ = 65535 &redef;
 	## Threshold for attack indictor:
 	## number of violations more than the threshold would signify an attack.
-	option DETECTION_THRESHOLD = 3 &redef;
+	const DETECTION_THRESHOLD = 3 &redef;
 }
 
 event bro_init() &priority=10
