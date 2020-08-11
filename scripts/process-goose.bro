@@ -440,7 +440,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 		generate_notice("access_attack", fmt("Injection of a packet with unknown srcMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, current_time()));
 	if ( dst_mac !in dst_mac_wl )
-		generate_notice("access_attack", fmt("Injection of a packet with unknown dstMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, dst_mac=%s, detectionTime=%f",
+		generate_notice("access_attack", fmt("Injection of a packet with unknown dstMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, dstMAC=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, dst_mac, current_time()));
 	if ( data_set !in dat_set_wl )
 		generate_notice("access_attack", fmt("Injection of a packet with unknown datSet: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
