@@ -428,7 +428,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 
 	# 1.2 TAL validation
 	if ( TAL<MIN_TAL || TAL > MAX_TAL)
-		generate_notice("semantic_attack", fmt("Injection of a packet with bad TAL: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, TAL=%d, detectionTime= %f",
+		generate_notice("semantic_attack", fmt("Injection of a packet with bad TAL: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, TAL=%d, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, TAL, current_time()));
 	# 1.3 T validation
 	# Done inside next_sq() and next_st()
@@ -437,20 +437,20 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 	# START 2
 	# 2. Whitelisting.
 	if ( src_mac !in src_mac_wl )
-		generate_notice("access_attack", fmt("Injection of a packet with unknown srcMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+		generate_notice("access_attack", fmt("Injection of a packet with unknown srcMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, current_time()));
 	if ( dst_mac !in dst_mac_wl )
-		generate_notice("access_attack", fmt("Injection of a packet with unknown dstMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, dst_mac=%s, detectionTime= %f",
+		generate_notice("access_attack", fmt("Injection of a packet with unknown dstMAC: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, dst_mac=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, dst_mac, current_time()));
 	if ( data_set !in dat_set_wl )
-		generate_notice("access_attack", fmt("Injection of a packet with unknown datSet: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+		generate_notice("access_attack", fmt("Injection of a packet with unknown datSet: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, current_time()));
 	if ( pdu$gocbRef !in gocb_ref_wl )
-		generate_notice("access_attack", fmt("Injection of a packet with unknown gocbRef: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, gocbRef=%s, detectionTime= %f",
+		generate_notice("access_attack", fmt("Injection of a packet with unknown gocbRef: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, gocbRef=%s, detectionTime=%f",
 			st_num, sq_num, src_mac, data_set, pdu$gocbRef, current_time()));
 	if(pdu?$goID)
 		if ( pdu$goID !in go_id_wl )
-			generate_notice("access_attack", fmt("Injection of a packet with unknown goID: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, goID=%s, detectionTime= %f",
+			generate_notice("access_attack", fmt("Injection of a packet with unknown goID: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, goID=%s, detectionTime=%f",
 				st_num, sq_num, src_mac, data_set, pdu$goID, current_time()));
 	# Todo: implement pair whitelisting for: (srcMAC, datSet) and (datSet, numDatSetEntries).
 	# END 2
@@ -487,7 +487,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 		} #end else if 'next_expected_st
 		else if ( already_present(st_num, sq_num, data_set) >= 0 ) {
 			local match_idx = already_present(st_num, sq_num, data_set);
-			generate_notice("poisoning_attack", fmt("Injection of a packet with expected numbers: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+			generate_notice("poisoning_attack", fmt("Injection of a packet with expected numbers: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 				staging_state[data_set][match_idx]$st, staging_state[data_set][match_idx]$sq, src_mac, data_set, current_time()));
 			attack_state[data_set][|attack_state[data_set]|] = staging_state[data_set][match_idx];
 			# Uncomment below to stop security analysis after an attack is found and alerted.
@@ -497,7 +497,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 		} # end else if 'already_present' 
 		else if ( state_changed[data_set] && prev_state_recurred(st_num, sq_num, data_set) ) {
         		# Violation occurred is actually the whole staging + attack
-			generate_notice("poisoning_attack", fmt("Previous state recurred: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+			generate_notice("poisoning_attack", fmt("Previous state recurred: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 				st_num, sq_num, src_mac, data_set, current_time()));
 			attack_state[data_set][|attack_state[data_set]|] = this_pkt;
 			# Uncomment below to stop security analysis after an attack is found and alerted.
@@ -506,7 +506,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 			normal_state = table();
 		} # end else if
 		else if ( high_sq(st_num, sq_num, data_set) ) {
-			generate_notice("poisoning_attack", fmt("Injection of a packet with high sqNum: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+			generate_notice("poisoning_attack", fmt("Injection of a packet with high sqNum: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 				st_num, sq_num, src_mac, data_set, current_time()));
         		attack_state[data_set][|attack_state[data_set]|] = this_pkt;
 			# Uncomment below to stop security analysis after an attack is found and alerted.
@@ -515,7 +515,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 			normal_state = table();
 		} # end else if 'high_sq'
 		else if ( high_st(st_num, sq_num, data_set) ) {
-			generate_notice("poisoning_attack", fmt("Injection of a packet with high stNum: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+			generate_notice("poisoning_attack", fmt("Injection of a packet with high stNum: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 				st_num, sq_num, src_mac, data_set, current_time()));
 			attack_state[data_set][|attack_state[data_set]|] = this_pkt;
 			# Uncomment below to stop security analysis after an attack is found and alerted.
@@ -526,7 +526,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 		#else {
 		#	# Anomalous values of st_num or sq_num, but not malicious.
 		#	# These are mostly the packets with old counters, that the subscriber will ignore.
-		#	generate_notice("anomaly", fmt("Anomalous pakcet: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime= %f",
+		#	generate_notice("anomaly", fmt("Anomalous pakcet: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, detectionTime=%f",
 		#		st_num, sq_num, src_mac, data_set, current_time()));
 		#} # end else
 
@@ -609,7 +609,7 @@ event goose_message(info: GOOSE::PacketInfo, pdu: GOOSE::PDU) &priority=-20 {
 	for ( pfx in ds_prefixes ) {
 		if ( after_fault_counter[pfx+"MEAS/LLN0$Measurement"]>2 || after_fault_counter[pfx+"PROT/LLN0$Alarm"]>2 || after_fault_counter[pfx+"CTRL/LLN0$Status"]>2) {
 			# Attack.
-			generate_notice("data_attack", fmt("False data injection attack: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, allData=%s, detectionTime= %f",
+			generate_notice("data_attack", fmt("False data injection attack: stNum=%d, sqNum=%d, srcMAC=%s, datSet=%s, allData=%s, detectionTime=%f",
 				fd_st, fd_sq, fd_src, fd_ds, fd_data, current_time()));
 			#LIED10_detection_done = T;
 			# Reset the globals to restart the check.
