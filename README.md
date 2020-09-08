@@ -16,8 +16,9 @@
       4. Stop Bro: BroControl CLI: `stop`
 7. In either case, the output will consist of several Bro logs. The logs of our interest are `goose.log`, `goose_stats.log`, and if any attacks detected, `notice.log`. For direct input case, the logs are written to the directry from which Bro was run. For live traffic option, the logs are written to `/usr/local/bro/logs/current/`
 
-
+Note: Part of the detection approach is published in [2].
 
 ### References
 
 * [1] M. Kabir-Querrec, “Cyber security of smart-grid control systems: Intrusion detection in IEC 61850 communication networks,” Ph.D. dissertation, Universite Grenoble Alpes, 2017. [Online]. Available: https://tel.archives-ouvertes.fr/tel-01609230v2
+* [2] A. Bohara, J. Ros-Giralt, G. Elbez, A. Valdes, K. Nahrstedt, and W. H. Sanders, "ED4GAP: Efficient Detection for GOOSE-Based Poisoning Attacks on IEC 61850 Substations," Proceedings of the 11th IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm), online virtual conference, November 11-13, 2020, to appear.
